@@ -14,6 +14,7 @@
 //   7  dining, kitchen  0.88 - 1.00
 
 import { FT, CUT_PLAN, CEIL, LAWN, DECK, DECKS } from './plan.js';
+import { ROUTES } from './routes.js';
 
 const io = (t) => t * t * (3 - 2 * t);
 const io5 = (t) => t * t * t * (t * (t * 6 - 15) + 10);
@@ -69,7 +70,7 @@ function groundAt(X, N) {
 
 const EYE = 5.2; // ft
 
-export function makeRig(aspect) {
+export function makeRig(aspect, route = ROUTES.a) {
   const portrait = aspect < 0.9;
   const fovWalk = portrait ? 74 : aspect < 1.5 ? 60 : 54;
 
@@ -82,7 +83,7 @@ export function makeRig(aspect) {
   const cn = portrait ? planCn + 0.2 * F0 : planCn;
 
   // landing in the yard, in front of the deck stair, looking north
-  const landX = 23.45 * FT, landN = -34 * FT;
+  const landX = 23.1 * FT, landN = -34 * FT;
   const landY = (LAWN + EYE) * FT;
   const REST = 15; // m from camera to the point it looks at when it lands
   const landFrame = 2 * REST * T(fovWalk);
@@ -102,21 +103,12 @@ export function makeRig(aspect) {
   const fogF = track([[0, L(9000)], [s2, L(9000)], [s3, L(160), io]]);
 
   // ---- stops 4-7: on foot. [s, X ft, N ft, yaw deg (+ = turn left / west), pitch deg]
-  const W = [
-    [s3, 23.45, -34, 0, 0],
-    [0.555, 23.45, -23.5, 0, 4],
-    [0.62, 23.45, -12.4, 0, 0],
-    [0.675, 23.45, -3.0, 0, -2],
-    [0.735, 23.3, 7.4, 8, -3],
-    [0.775, 21.0, 8.1, 72, -4],
-    [0.815, 14.4, 11.6, 104, -7],
-    [0.85, 11.6, 14.6, 142, -12],
-    [0.875, 13.0, 9.6, 232, -2], // turn clear of the side-table lamp, inside the opening band
-    [0.9, 19.4, 7.9, 262, -5],
-    [0.93, 27.0, 7.9, 266, -5],
-    [0.96, 33.6, 8.3, 268, -7],
-    [1.0, 37.6, 8.7, 256, -9],
-  ];
+  // The route (js/routes.js) decides the walk and when each room reveals.
+  const W = route.walk;
+  const rv = (key, s) => {
+    const r = route.reveal[key];
+    return r ? clamp01((s - r[0]) / r[1]) : 0;
+  };
   const px = glide(W.map((k) => [k[0], k[1]]));
   const pn = glide(W.map((k) => [k[0], k[2]]));
   const pyaw = glide(W.map((k) => [k[0], k[3]]));
@@ -151,9 +143,9 @@ export function makeRig(aspect) {
     }
     // reveals: the yard and deck first, then each room as the camera reaches it
     o.out = clamp01((s - 0.44) / 0.2);
-    o.foyer = clamp01((s - 0.69) / 0.075);
-    o.great = clamp01((s - 0.765) / 0.065);
-    o.kitchen = clamp01((s - 0.885) / 0.07);
+    o.foyer = rv('foyer', s);
+    o.great = rv('great', s);
+    o.kitchen = rv('kitchen', s);
     o.sky = clamp01((s - 0.4) / 0.12);
     // keep the depth buffer tight: from far above, everything sits in a thin slab
     o.near = o.y > 60 ? Math.max(0.1, o.dist - 70) : 0.05;

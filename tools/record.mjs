@@ -38,7 +38,12 @@ function monotone(keys) {
   };
 }
 
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
+// GPU=1 renders on the real graphics card (much faster); the default is the
+// software renderer, which works everywhere.
+const glArgs = process.env.GPU
+  ? ['--use-angle=d3d11', '--enable-gpu', '--ignore-gpu-blocklist']
+  : ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const browser = await chromium.launch({ args: glArgs });
 const page = await browser.newPage({ viewport: { width: W, height: H }, deviceScaleFactor: 1 });
 const logs = [];
 page.on('console', (m) => logs.push(`[${m.type()}] ${m.text()}`));
@@ -66,7 +71,8 @@ if (process.env.VENDOR) {
   });
 }
 
-await page.goto(`http://localhost:${PORT}/?capture=1${process.env.PR ? '&pr=' + process.env.PR : ''}`);
+// ROUTE=a|b|c|d picks a walk-through variation (js/routes.js)
+await page.goto(`http://localhost:${PORT}/?capture=1${process.env.PR ? '&pr=' + process.env.PR : ''}${process.env.ROUTE ? '&route=' + process.env.ROUTE : ''}`);
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
 await page.waitForTimeout(800);
 fs.mkdirSync(OUT, { recursive: true });
@@ -75,8 +81,8 @@ if (mode === 'shots') {
   const list = rest.length ? rest.map(Number) : [0, 0.12, 0.3, 0.42, 0.5, 0.6, 0.7, 0.76, 0.84, 0.92, 1];
   for (const s of list) {
     await page.evaluate((v) => window.__frame(v), s);
-    const f = path.join(OUT, `shot-${s.toFixed(3)}.png`);
-    await page.screenshot({ path: f, type: 'png' });
+    const f = path.join(OUT, `shot-${process.env.ROUTE ? process.env.ROUTE + '-' : ''}${s.toFixed(3)}.jpg`);
+    await page.screenshot({ path: f, type: 'jpeg', quality: 85 });
     console.log(f);
   }
 } else if (mode === 'video') {

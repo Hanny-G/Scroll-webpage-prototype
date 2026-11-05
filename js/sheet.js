@@ -77,8 +77,8 @@ export function buildSheet({ planesFor, anisotropy = 8 }) {
 
   // stair notes
   text([{ t: 'UP TO 2ND FLOOR', size: 0.42, weight: 500 }], { room: 'great', X: 8.0, N: 20.5, y: 0.03 });
-  text([{ t: 'UP', size: 0.42, weight: 500 }], { room: 'none', X: 32.8, N: 9.6, y: 0.03 });
-  text([{ t: 'DN', size: 0.42, weight: 500 }], { room: 'none', X: 36.7, N: 9.6, y: 0.03 });
+  text([{ t: 'UP', size: 0.42, weight: 500 }], { room: 'none', X: 32.8, N: 9.9, y: 0.03 });
+  text([{ t: 'DN', size: 0.42, weight: 500 }], { room: 'none', X: 36.6, N: 9.9, y: 0.03 });
   // stair arrows
   const arrowPath = (set, pts, y) => {
     for (let i = 1; i < pts.length; i++) seg(set, pts[i - 1][0], pts[i - 1][1], pts[i][0], pts[i][1], y);
@@ -86,9 +86,9 @@ export function buildSheet({ planesFor, anisotropy = 8 }) {
     const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
     for (const s of [-1, 1]) seg(set, b[0], b[1], b[0] - Math.cos(ang + s * 0.45) * 0.8, b[1] - Math.sin(ang + s * 0.45) * 0.8, y);
   };
-  arrowPath('ink', [[10.8, 23.2], [2.25, 23.2], [2.25, 14.0]], 0.03);
-  arrowPath('ink', [[32.8, 11.2], [32.8, 19.6]], 0.03);
-  arrowPath('ink', [[36.7, 19.6], [36.7, 11.2]], 0.03);
+  arrowPath('ink', [[10.8, 23.36], [2.23, 23.36], [2.23, 14.0]], 0.03);
+  arrowPath('ink', [[32.8, 11.4], [32.8, 19.5], [36.6, 19.5], [36.6, 16.5]], 0.03); // up, landing, back over
+  arrowPath('ink', [[36.6, 11.4], [36.6, 15.6]], 0.03); // down to the basement, heading north
 
   // ---- door swings -----------------------------------------------------------------
   for (const s of SWINGS) {

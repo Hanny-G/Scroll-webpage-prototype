@@ -7,9 +7,11 @@ import { CUT, U, setReveal, reveal, makeMaterials, inkLines, texturesReady } fro
 import { buildHouse } from './build.js';
 import { buildSheet } from './sheet.js';
 import { makeRig } from './rig.js';
+import { ROUTES, pickRoute } from './routes.js';
 
 const params = new URLSearchParams(location.search);
 const CAPTURE = params.has('capture');
+const ROUTE = ROUTES[pickRoute()];
 const errors = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 
@@ -60,7 +62,7 @@ scene.add(hemi);
 // warm lamps inside, so the rooms glow against the dusk
 const lamps = [
   [23.2, 5.6, 13.0, 5],
-  [8.5, 7.5, 5.0, 7],
+  [8.5, 7.0, 5.0, 7],
   [38.0, 6.0, 5.4, 6],
   [48.3, 6.0, 6.6, 6],
 ].map(([X, y, N, i]) => {
@@ -120,11 +122,14 @@ sheet.mk(house.cables, cableMat);
 // ---------------------------------------------------------------------------
 // one frame
 // ---------------------------------------------------------------------------
-let rig = makeRig(innerWidth / innerHeight);
+let rig = makeRig(innerWidth / innerHeight, ROUTE);
 const hud = { lens: document.getElementById('hud-lens'), height: document.getElementById('hud-height'), cut: document.getElementById('hud-cut') };
-const rail = [...document.querySelectorAll('#rail span')];
-const grain = document.getElementById('grain');
+// the rail lists the rooms in the order this route visits them
 const railEl = document.getElementById('rail');
+railEl.innerHTML = [['01 Sheet', 0], ['02 Cut', 0.05], ['03 Descent', 0.3], ...ROUTE.rail]
+  .map(([t, at]) => `<span data-at="${at}">${t}</span>`).join('');
+const rail = [...railEl.querySelectorAll('span')];
+const grain = document.getElementById('grain');
 let last = null;
 let shadowsDirty = true;
 
@@ -174,7 +179,7 @@ function draw(s) {
 function layout() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
-  rig = makeRig(camera.aspect);
+  rig = makeRig(camera.aspect, ROUTE);
 }
 
 // ---------------------------------------------------------------------------
@@ -191,10 +196,7 @@ const cap = (sel, a, b) => {
 };
 cap('#cap-cut', 0.08, 0.26);
 cap('#cap-down', 0.33, 0.46);
-cap('#cap-deck', 0.53, 0.66);
-cap('#cap-foyer', 0.71, 0.762);
-cap('#cap-great', 0.795, 0.875);
-cap('#cap-kitchen', 0.915, null);
+for (const [k, [a, b]] of Object.entries(ROUTE.caps)) cap('#cap-' + k, a, b);
 
 let drawn = -1;
 function tick() {
@@ -241,6 +243,10 @@ async function boot() {
     drawn = -1;
     shadowsDirty = true;
     draw(proxy.s);
+  });
+  // switching #route-a … #route-d rebuilds the page with that walk
+  window.addEventListener('hashchange', () => {
+    if (/^#route-[a-z]$/.test(location.hash)) location.reload();
   });
   window.__state = () => ({ ...last, errors, calls: renderer.info.render.calls, tris: renderer.info.render.triangles });
   document.getElementById('loading').classList.add('done');

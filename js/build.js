@@ -8,7 +8,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import {
-  FT, WALLS, CEIL, SLAB_TOP, LAWN, DECK, DOOR_H, SILL, SWINGS, RISE, DECKS, RAIL_POSTS, TREES, HOUSE,
+  FT, WALLS, WALLS_UP, ROOFS, CEIL, F2, EAVE, LAWN, DECK, DOOR_H, SILL, OPEN_H, SWINGS, BARN, RISE, DECKS,
+  RAIL_POSTS, PORCH_POSTS, TREES, HOUSE,
 } from './plan.js';
 
 export function buildHouse(M) {
@@ -51,38 +52,41 @@ export function buildHouse(M) {
   }
 
   // ---- walls -----------------------------------------------------------------
-  for (const w of WALLS) {
+  for (const w of [...WALLS, ...WALLS_UP]) {
+    const Y0 = w.y0 ?? 0, Y1 = w.y1 ?? CEIL;
     const seg = (a, b, y0, y1, key = 'wall') => {
       if (b - a < 1e-3) return;
-      if (w.ax === 'x') box(key, a, w.c - w.t / 2, b, w.c + w.t / 2, y0, y1);
-      else box(key, w.c - w.t / 2, a, w.c + w.t / 2, b, y0, y1);
+      if (w.ax === 'x') box(key, a, w.c - w.t / 2, b, w.c + w.t / 2, Y0 + y0, Math.min(Y1, Y0 + y1));
+      else box(key, w.c - w.t / 2, a, w.c + w.t / 2, b, Y0 + y0, Math.min(Y1, Y0 + y1));
     };
+    const top = Y1 - Y0;
     const ops = [...w.ops].sort((p, q) => p.a - q.a);
     let at = w.a;
     for (const o of ops) {
-      seg(at, o.a, 0, CEIL);
-      if (o.k === 'door') seg(o.a, o.b, DOOR_H, CEIL);
-      if (o.k === 'open') seg(o.a, o.b, o.h ?? 8, CEIL);
+      seg(at, o.a, 0, top);
+      if (o.k === 'door') seg(o.a, o.b, DOOR_H, top);
+      if (o.k === 'open') seg(o.a, o.b, o.h ?? OPEN_H, top);
       if (o.k === 'slider') {
-        seg(o.a, o.b, DOOR_H, CEIL);
-        // two glass leaves, one slid open, with thin black frames
+        seg(o.a, o.b, DOOR_H, top);
+        // D1: a fixed leaf and a sliding leaf parked behind it, so half the door stands open
         const mid = (o.a + o.b) / 2;
-        glassPane(w, o.a + 0.1, mid + 0.4, 0.05, DOOR_H - 0.05, -0.06);
-        glassPane(w, mid + 0.4, o.b - 0.1, 0.05, DOOR_H - 0.05, 0.06);
+        const [p, q] = o.open === 'w' ? [mid - 0.05, o.b - 0.1] : [o.a + 0.1, mid + 0.05];
+        glassPane(w, p, q, Y0 + 0.05, Y0 + DOOR_H - 0.05, 0.06);
+        glassPane(w, p, q, Y0 + 0.05, Y0 + DOOR_H - 0.05, -0.06);
       }
       if (o.k === 'window') {
         const sill = o.sill ?? SILL;
         seg(o.a, o.b, 0, sill);
-        seg(o.a, o.b, DOOR_H, CEIL);
-        glassPane(w, o.a, o.b, sill, DOOR_H, 0);
+        seg(o.a, o.b, DOOR_H, top);
+        glassPane(w, o.a, o.b, Y0 + sill, Y0 + DOOR_H, 0);
       }
       if (o.k === 'garage') {
-        seg(o.a, o.b, 7.5, CEIL);
-        if (w.ax === 'n') box('garage', w.c - 0.08, o.a, w.c + 0.08, o.b, 0, 7.5);
+        seg(o.a, o.b, 7.0, top);
+        if (w.ax === 'n') box('garage', w.c - 0.08, o.a, w.c + 0.08, o.b, 0, 7.0);
       }
       at = o.b;
     }
-    seg(at, w.b, 0, CEIL);
+    seg(at, w.b, 0, top);
   }
 
   function glassPane(w, a, b, y0, y1, off) {
@@ -106,27 +110,24 @@ export function buildHouse(M) {
 
   // ---- floors, ceilings, roof, foundation --------------------------------------
   const F = -0.02; // floor finish sits on y = 0
-  box('oak', 0.5, 0.5, 16.1, 31.75, F, 0, { lines: false }); // great room, mud room
-  box('oak', 16.1, 5.0, 30.25, 21.95, F, 0, { lines: false }); // foyer
-  box('oak', 30.25, 0.5, 55.6, 31.75, F, 0, { lines: false }); // east block
-  box('concrete', 0.5, 32.25, 22.5, 55.25, F - 0.1, -0.1, { lines: false }); // garage slab
-  // foundation under everything, walk-out on the south
-  for (const h of HOUSE) box('stone', h[0], h[1], h[2], h[3], LAWN, -0.2, { lines: false });
-  // ceilings and the roof slab
-  const roofParts = [[0, 0, 16.6, 32.25], [16.6, 5.0, 29.75, 21.95], [29.75, 0, 56.1, 32.25], [0, 32.0, 23.0, 55.75]];
-  for (const r of roofParts) {
-    box('ceiling', r[0], r[1], r[2], r[3], CEIL, CEIL + 0.05, { lines: false });
-    box('roof', r[0] - 0.6, r[1] - 0.6, r[2] + 0.6, r[3] + 0.6, CEIL + 0.05, SLAB_TOP, { lines: false });
-  }
-  // a roof over the covered deck, on two posts
-  box('roof', 16.6, 21.7, 29.75, 32.6, CEIL + 0.05, SLAB_TOP - 0.3, { lines: false });
-  box('black', 28.9, 31.2, 29.5, 31.8, DECK, CEIL, { lines: true });
-  box('black', 28.9, 22.0, 29.5, 22.6, DECK, CEIL, { lines: true });
+  box('oak', 0.46, 0.46, 16.21, 31.77, F, 0, { lines: false }); // great room, stair hall, mud room
+  box('oak', 16.21, 5.0, 30.26, 22.0, F, 0, { lines: false }); // foyer
+  box('oak', 30.26, 0.46, 55.67, 31.87, F, 0, { lines: false }); // east block
+  box('concrete', 0.46, 32.23, 22.55, 55.31, F - 0.1, -0.1, { lines: false }); // garage slab
+  // foundation (S1.1): a basement under the east block, crawl spaces under the rest
+  for (const h of HOUSE) box('concrete', h[0], h[1], h[2], h[3], LAWN, -0.2, { lines: false });
+  box('concrete', 29.8, 32.33, 56.13, 32.87, LAWN, 0.4, { lines: false }); // retaining wall / reverse brick drop
+  // ceilings, and the floor band between the storeys (the second floor sits on it)
+  for (const r of HOUSE) box('ceiling', r[0], r[1], r[2], r[3], CEIL, CEIL + 0.05, { lines: false });
+  for (const r of HOUSE.slice(0, 3)) box('wall', r[0], r[1], r[2], r[3], CEIL + 0.05, F2, { lines: false });
 
-  // basement walk-out openings below the deck (W1 · D1 · W1 on the basement plan)
-  for (const [a, b, top] of [[1.5, 4.5, -2.4], [6.0, 12.0, -0.9], [13.0, 15.5, -2.4], [33, 36, -2.4], [40, 46, -0.9], [50, 53, -2.4]]) {
+  // basement walk-out under the dining room (W1 · D1 · W1 on the basement plan)
+  for (const [a, b, top] of [[32.6, 35.4, -2.4], [39.7, 45.7, -0.9], [50.4, 53.2, -2.4]]) {
     box('black', a, -0.04, b, 0.02, LAWN + (top < -1 ? 2.2 : 0.2), top - 0.4, { lines: false });
   }
+
+  // ---- roofs (A3.1, A3.2) ---------------------------------------------------------
+  buildRoofs();
 
   // ---- the deck ----------------------------------------------------------------
   const deckBox = (b, key = 'deck') => {
@@ -136,10 +137,14 @@ export function buildHouse(M) {
   deckBox(DECKS.main);
   deckBox(DECKS.notch);
   deckBox(DECKS.grill);
-  box('deck', ...DECKS.covered.slice(0, 2), ...DECKS.covered.slice(2), DECK - 0.15, DECK, { lines: false });
-  // posts under the deck
-  for (const X of [0.4, 8, 16, 24, 32, 40, 47.9]) box('black', X - 0.25, -11.6, X + 0.25, -11.1, LAWN, DECK - 1.1);
-  for (const X of [48.6, 55.4]) box('black', X - 0.25, -17.6, X + 0.25, -17.1, LAWN, DECK - 1.1);
+  box('deck', ...DECKS.north.slice(0, 2), ...DECKS.north.slice(2), DECK - 0.15, DECK, { lines: false });
+  // posts under the deck, on the sonotubes
+  for (const X of [0.4, 8, 16, 23, 30, 37.5, 47.9, 55.6]) box('black', X - 0.25, -11.6, X + 0.25, -11.1, LAWN, DECK - 1.1);
+  for (const X of [48.6, 55.6]) box('black', X - 0.25, -17.6, X + 0.25, -17.1, LAWN, DECK - 1.1);
+  // posts carrying the porch roof, along the deck edge and at the grilling area
+  const porchUnder = (N) => ROOFS.porch.top + ROOFS.porch.pitch * N - 0.5;
+  for (const X of PORCH_POSTS) box('white', X - 0.25, -11.83, X + 0.25, -11.33, DECK, porchUnder(-11.58));
+  for (const X of [48.55, 55.75]) box('white', X - 0.25, -17.83, X + 0.25, -17.33, DECK, ROOFS.grill.eave + 0.2);
 
   // stair down to the yard
   const S = DECKS.stair;
@@ -165,7 +170,7 @@ export function buildHouse(M) {
   const posts = [];
   for (const X of RAIL_POSTS) posts.push([X, -11.83]);
   for (const N of [-11.83, -5.9, 0]) posts.push([0, N]);
-  for (const [X, N] of [[48.3, -17.83], [52, -17.83], [55.8, -17.83], [55.8, -14.8], [55.8, -11.83], [55.8, -6], [55.8, 0]]) posts.push([X, N]);
+  for (const [X, N] of [[48.3, -17.83], [52, -17.83], [56.0, -17.83], [56.0, -14.8], [56.0, -11.83], [56.0, -6], [56.0, 0]]) posts.push([X, N]);
   for (const [X, N] of posts) box('black', X - 0.17, N - 0.17, X + 0.17, N + 0.17, DECK, railTop);
   const rail = (X0, N0, X1, N1) => {
     const len = Math.hypot(X1 - X0, N1 - N0);
@@ -181,31 +186,39 @@ export function buildHouse(M) {
   rail(0, -11.83, S.x0, -11.83);
   rail(S.x1, -11.83, 48.3, -11.83);
   rail(48.3, -11.83, 48.3, -17.83);
-  rail(48.3, -17.83, 55.8, -17.83);
-  rail(55.8, -17.83, 55.8, 0);
+  rail(48.3, -17.83, 56.0, -17.83);
+  rail(56.0, -17.83, 56.0, 0);
   rail(0, -11.83, 0, 0);
 
   // ---- stairs inside -------------------------------------------------------------
-  // great room L stair: treads 1-8 west along the top, 9-17 south down the west wall
+  // great room L stair: treads 1-8 west along the top, a landing, 9-17 south down the west wall
   const tread = (X0, N0, X1, N1, k) => box('oak', X0, N0, X1, N1, k * RISE - 0.15, k * RISE);
   for (let k = 1; k <= 8; k++) {
-    const X1 = 11.4 - (k - 1) * 0.925, X0 = X1 - 0.925;
-    tread(X0, 21.4, X1, 25.05, k);
-    box('white', X1 - 0.05, 21.4, X1, 25.05, (k - 1) * RISE, k * RISE, { lines: false }); // riser
+    const X1 = 11.33 - (k - 1) * 0.916, X0 = X1 - 0.916;
+    tread(X0, 21.61, X1, 25.11, k);
+    box('white', X1 - 0.05, 21.61, X1, 25.11, (k - 1) * RISE, k * RISE, { lines: false }); // riser
   }
-  box('oak', 0.5, 21.4, 4.0, 25.05, 8 * RISE - 0.15, 8 * RISE); // corner landing
+  box('oak', 0.46, 21.61, 4.0, 25.11, 8 * RISE - 0.15, 8 * RISE); // corner landing
   for (let k = 9; k <= 17; k++) {
-    const N1 = 21.4 - (k - 9) * 0.93, N0 = N1 - 0.93;
-    tread(0.5, N0, 4.0, N1, k);
+    const N1 = 21.61 - (k - 9) * 0.917, N0 = N1 - 0.917;
+    tread(0.46, N0, 4.0, N1, k);
   }
-  // east stair: up, straight north
-  for (let k = 1; k <= 18; k++) {
-    const N0 = 10.6 + (k - 1) * 0.6;
-    if (N0 > 21.3) break;
-    box('oak', 31.0, N0, 34.55, N0 + 0.6, k * RISE - 0.15, k * RISE);
+  // east stair: nine risers up, north, to a landing across both runs ...
+  for (let k = 1; k <= 8; k++) {
+    const N0 = 10.97 + (k - 1) * 0.833;
+    tread(31.02, N0, 34.55, N0 + 0.833, k);
+    box('white', 31.02, N0, 34.55, N0 + 0.05, (k - 1) * RISE, k * RISE, { lines: false }); // riser
   }
-  // east stair: down to the basement, drawn as treads stepping into the floor
-  for (let k = 0; k < 9; k++) addLine(34.95, 20.9 - k * 0.92, 38.4, 20.9 - k * 0.92, 0.02);
+  box('oak', 31.02, 17.64, 38.34, 21.36, 9 * RISE - 0.15, 9 * RISE); // landing
+  box('white', 31.02, 17.64, 38.34, 21.36, 9 * RISE - 0.8, 9 * RISE - 0.15, { lines: false });
+  // ... then back south over the stair down to the basement
+  for (let k = 10; k <= 17; k++) {
+    const N1 = 17.64 - (k - 10) * 0.833, N0 = N1 - 0.833;
+    tread(34.84, N0, 38.34, N1, k);
+    box('white', 34.84, N0, 38.34, N1, k * RISE - 0.8, k * RISE - 0.15, { lines: false }); // soffit
+  }
+  // east stair: down to the basement, heading north, drawn as treads stepping into the floor
+  for (let k = 0; k < 9; k++) addLine(34.84, 11.0 + k * 0.83, 38.34, 11.0 + k * 0.83, 0.02);
 
   // ---- furniture -----------------------------------------------------------------
   // great room: sofa with its back to the stair, two armchairs, coffee table, rug
@@ -224,10 +237,10 @@ export function buildHouse(M) {
   // foyer: a round rug, a console, a big pendant
   cyl('rug', 23.2, 13.0, 4.2, 4.2, 0, 0.04, 48);
   box('walnut', 17.0, 14.5, 18.4, 19.5, 0, 2.7);
-  // drum bottom at 7'-8": above the 5'-2" eye line, so it doesn't block the view in
-  cyl('brass', 23.2, 13.0, 1.1, 0.2, 7.75, 8.25, 24);
-  cyl('lamp', 23.2, 13.0, 1.0, 1.0, 7.65, 7.75, 24, { lines: false });
-  cyl('black', 23.2, 13.0, 0.03, 0.03, 8.25, CEIL, 6, { lines: false });
+  // a close-to-ceiling drum under the 8'-0" ceiling, well above the 5'-2" eye line
+  cyl('brass', 23.2, 13.0, 1.1, 0.25, 7.45, 7.85, 24);
+  cyl('lamp', 23.2, 13.0, 1.0, 1.0, 7.38, 7.45, 24, { lines: false });
+  cyl('black', 23.2, 13.0, 0.03, 0.03, 7.85, CEIL, 6, { lines: false });
 
   // dining: an 8' table with eight chairs
   box('walnut', 33.95, 3.65, 41.95, 7.15, 2.35, 2.5);
@@ -246,16 +259,17 @@ export function buildHouse(M) {
   }
 
   // kitchen: island, L-shaped run with cabinets, uppers on the north wall
-  box('cabinet', 46.4, 3.75, 50.1, 9.45, 0, 3.0);
-  box('marble', 46.25, 3.6, 50.25, 9.6, 3.0, 3.15);
-  for (const N of [4.8, 6.6, 8.4]) stool(45.4, N);
-  box('cabinet', 53.6, 0.6, 55.6, 13.0, 0, 3.0);
-  box('marble', 53.45, 0.5, 55.6, 13.15, 3.0, 3.15);
-  box('cabinet', 46.6, 13.0, 55.6, 14.85, 0, 3.0);
-  box('marble', 46.6, 12.85, 55.6, 14.85, 3.0, 3.15);
-  box('cabinet', 47.5, 13.65, 55.6, 14.85, 4.6, 7.6);
-  box('black', 49.6, 13.4, 52.2, 14.85, 3.15, 3.3); // cooktop
-  box('marble', 46.6, 13.6, 55.6, 14.85, 3.15, 4.6, { lines: false }); // backsplash
+  // island table 6'-0" x 4'-0" with a 12" overhang on the west for stools
+  box('cabinet', 47.2, 3.85, 50.1, 9.6, 0, 3.0);
+  box('marble', 46.2, 3.73, 50.2, 9.73, 3.0, 3.15);
+  for (const N of [4.9, 6.73, 8.55]) stool(45.6, N);
+  box('cabinet', 53.6, 0.46, 55.67, 13.0, 0, 3.0);
+  box('marble', 53.45, 0.46, 55.67, 13.15, 3.0, 3.15);
+  box('cabinet', 46.8, 13.0, 55.67, 15.04, 0, 3.0);
+  box('marble', 46.8, 12.85, 55.67, 15.04, 3.0, 3.15);
+  box('cabinet', 47.5, 13.8, 55.67, 15.04, 4.6, 7.6);
+  box('black', 49.6, 13.4, 52.2, 15.0, 3.15, 3.3); // cooktop
+  box('marble', 46.8, 13.75, 55.67, 15.04, 3.15, 4.6, { lines: false }); // backsplash
   for (const N of [5.0, 6.6, 8.2]) {
     cyl('lamp', 48.25, N, 0.42, 0.42, 6.0, 6.7, 16, { lines: false });
     cyl('black', 48.25, N, 0.02, 0.02, 6.7, CEIL, 6, { lines: false });
@@ -269,10 +283,14 @@ export function buildHouse(M) {
   box('white', 33.0, 30.6, 38.6, 31.6, 0, 3.4);
   box('walnut', 31.4, 29.9, 32.8, 31.4, 0, 2.0);
   box('walnut', 38.8, 29.9, 40.2, 31.4, 0, 2.0);
-  // bathroom: double vanity, toilet, shower
+  // bathroom: double vanity, toilet behind a half wall, 3'-0" x 5'-0" shower
   box('white', 46.8, 26.0, 48.6, 31.5, 0, 2.9);
-  box('white', 52.6, 27.4, 54.4, 29.6, 0, 1.4);
-  box('glass', 51.2, 21.0, 51.3, 26.0, 0, 7, { lines: true });
+  box('white', 53.2, 27.0, 55.0, 29.0, 0, 1.4);
+  box('wall', 52.34, 25.83, 55.67, 26.29, 0, CEIL); // shower wall
+  box('wall', 52.34, 26.29, 52.6, 27.6, 0, 3.5); // the 1/2 wall
+  box('glass', 52.6, 20.83, 52.7, 25.83, 0, 7, { lines: true });
+  // barn doors (D4 pantry, D7 closet), slid open
+  for (const b of BARN) box('walnut', b.X0, b.N0, b.X1, b.N1, 0.05, DOOR_H + 0.1);
   // mud room bench, garage cars
   box('walnut', 0.5, 29.8, 2.0, 31.7, 0, 1.5);
   car(11.8, 48.6);
@@ -315,6 +333,114 @@ export function buildHouse(M) {
   }
 
   return { group, edges, cables, arcs, treeEdges };
+
+  // ---- roofs ------------------------------------------------------------------------
+  // Every roof plane is a solid slab, 0.5 ft thick, so it casts shadows and closes
+  // the model. Attics under the gables are solid wedges in the wall material, so
+  // their gable ends read as siding.
+  function buildRoofs() {
+    const { oh, west, east, middle, garage, porch, grill } = ROOFS;
+    const T = 0.5;
+    // a gable with its ridge running north-south
+    const gableNS = (r, eave, { south = true, north = true, wedgeBase = eave } = {}) => {
+      const Xc = (r.X0 + r.X1) / 2, half = (r.X1 - r.X0) / 2;
+      const top = eave + half * r.pitch, low = eave - oh * r.pitch;
+      const N0 = r.N0 - (south ? oh : 0), N1 = r.N1 + (north ? oh : 0);
+      slab('roof', [[r.X0 - oh, N0, low], [Xc, N0, top], [Xc, N1, top], [r.X0 - oh, N1, low]], T);
+      slab('roof', [[r.X1 + oh, N0, low], [r.X1 + oh, N1, low], [Xc, N1, top], [Xc, N0, top]], T);
+      wedge('wall', 'n', r.N0, r.N1, [[r.X0, wedgeBase], [r.X1, wedgeBase], [r.X1, eave], [Xc, top - T * 1.6], [r.X0, eave]]);
+      return top;
+    };
+    gableNS(west, EAVE);
+    gableNS(east, EAVE);
+    gableNS(garage, garage.eave, { south: false, wedgeBase: CEIL });
+
+    // the middle block: 8/12 east-west, its ridge dying into both 12/12 gables (the hexagon on A3.2)
+    {
+      const Nc = (middle.N0 + middle.N1) / 2, half = (middle.N1 - middle.N0) / 2;
+      const top = EAVE + half * middle.pitch, low = EAVE - oh * middle.pitch;
+      // where the middle planes meet the side gables (west gable falls to the east, east gable to the west)
+      const xW = (h) => west.X1 + (EAVE - h) / west.pitch, xE = (h) => east.X0 - (EAVE - h) / east.pitch;
+      const S = middle.N0 - oh, Nn = middle.N1 + oh;
+      slab('roof', [[xW(low), S, low], [xE(low), S, low], [xE(top), Nc, top], [xW(top), Nc, top]], T);
+      slab('roof', [[xW(top), Nc, top], [xE(top), Nc, top], [xE(low), Nn, low], [xW(low), Nn, low]], T);
+      wedge('wall', 'x', middle.X0, middle.X1, [[middle.N0, EAVE], [middle.N1, EAVE], [Nc, top - T * 1.6]]);
+    }
+
+    // the porch roof over the whole deck, 3/12, with the open light well in front of the foyer
+    const ph = (N) => porch.top + porch.pitch * N;
+    slab('roof', [[porch.X0, 0, ph(0)], [porch.X1, 0, ph(0)], [porch.X1, porch.N, ph(porch.N)], [porch.X0, porch.N, ph(porch.N)]], T);
+    const [w0, w1] = porch.well;
+    for (const [a, b] of [[west.X1, w0], [w1, east.X0]]) slab('roof', [[a, 0, ph(0)], [b, 0, ph(0)], [b, 5.0, ph(5.0)], [a, 5.0, ph(5.0)]], T);
+
+    // the grilling-area gable, 4/12, its ridge running north into the porch roof
+    {
+      const Xc = (grill.X0 + grill.X1) / 2;
+      const top = grill.eave + ((grill.X1 - grill.X0) / 2) * grill.pitch;
+      const Nr = (top - porch.top) / porch.pitch, Ne = (grill.eave - porch.top) / porch.pitch; // where ridge and eave meet the porch roof
+      slab('roof', [[grill.X0, grill.N, grill.eave], [Xc, grill.N, top], [Xc, Nr, top], [grill.X0, Ne, grill.eave]], T * 0.7);
+      slab('roof', [[grill.X1, grill.N, grill.eave], [grill.X1, Ne, grill.eave], [Xc, Nr, top], [Xc, grill.N, top]], T * 0.7);
+    }
+  }
+
+  // A planar polygon [X, N, h] in feet, made into a closed slab t feet thick (dropped straight down).
+  function slab(key, pts, t) {
+    const P = (X, N, h) => new THREE.Vector3(X * FT, h * FT, -N * FT);
+    const top = pts.map((p) => P(p[0], p[1], p[2]));
+    const bot = pts.map((p) => P(p[0], p[1], p[2] - t));
+    const c = new THREE.Vector3();
+    [...top, ...bot].forEach((v) => c.add(v));
+    c.multiplyScalar(1 / (top.length * 2));
+    // the top is roofing; the underside and edges are the light soffit and fascia (A3.x soffit note)
+    const roof = [], trim = [];
+    for (let i = 1; i < top.length - 1; i++) {
+      roof.push([top[0], top[i], top[i + 1]]);
+      trim.push([bot[0], bot[i + 1], bot[i]]);
+    }
+    for (let i = 0; i < top.length; i++) {
+      const j = (i + 1) % top.length;
+      trim.push([top[i], bot[i], bot[j]], [top[i], bot[j], top[j]]);
+    }
+    closedMesh(key, roof, c);
+    closedMesh('white', trim, c);
+  }
+
+  // A prism: a cross-section [[u, h], ...] (u = X when axis 'n', u = N when axis 'x'),
+  // run from a to b along the other plan axis.
+  function wedge(key, axis, a, b, sec) {
+    const P = (u, h, v) => (axis === 'n' ? new THREE.Vector3(u * FT, h * FT, -v * FT) : new THREE.Vector3(v * FT, h * FT, -u * FT));
+    const A = sec.map(([u, h]) => P(u, h, a)), B = sec.map(([u, h]) => P(u, h, b));
+    const c = new THREE.Vector3();
+    [...A, ...B].forEach((v) => c.add(v));
+    c.multiplyScalar(1 / (A.length * 2));
+    const tris = [];
+    for (let i = 1; i < A.length - 1; i++) tris.push([A[0], A[i], A[i + 1]], [B[0], B[i + 1], B[i]]);
+    for (let i = 0; i < A.length; i++) {
+      const j = (i + 1) % A.length;
+      tris.push([A[i], B[i], B[j]], [A[i], B[j], A[j]]);
+    }
+    closedMesh(key, tris, c);
+  }
+
+  // Triangles of a convex solid, each turned to face away from its centre, so the
+  // ink shader sees the outside as front faces and the cut inside as back faces.
+  function closedMesh(key, tris, centre) {
+    const pos = [];
+    const e1 = new THREE.Vector3(), e2 = new THREE.Vector3(), n = new THREE.Vector3(), m = new THREE.Vector3();
+    for (const [p, q, r] of tris) {
+      e1.subVectors(q, p); e2.subVectors(r, p); n.crossVectors(e1, e2);
+      if (n.lengthSq() < 1e-14) continue;
+      m.copy(p).add(q).add(r).multiplyScalar(1 / 3).sub(centre);
+      const tri = n.dot(m) < 0 ? [p, r, q] : [p, q, r];
+      for (const v of tri) pos.push(v.x, v.y, v.z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array((pos.length / 3) * 2), 2));
+    g.computeVertexNormals();
+    put(key, g);
+    addEdges(g);
+  }
 
   // ---- helpers ---------------------------------------------------------------------
   function sofa(X, N, w, d, deg) {

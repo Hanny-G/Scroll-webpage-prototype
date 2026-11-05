@@ -137,6 +137,13 @@ const MAPFRAG = /* glsl */ `
   vec3 tint = outside ? uOutTint : uTint;
   float l = dot(tc, vec3(0.2126, 0.7152, 0.0722));
   tc = mix(vec3(l), tc, outside ? uOutSat : uSat);
+  // board-and-batten siding: a 2" batten every 16", picked out by its two shadow lines
+  if (outside && uOutBatten > 0.5 && an.y < 0.5) {
+    float u = an.x > an.z ? vWp.z : vWp.x;
+    float d = abs(fract(u / 0.4064) - 0.5) * 0.4064;
+    float edge = smoothstep(0.019, 0.024, d) * (1.0 - smoothstep(0.028, 0.034, d));
+    tc *= (d < 0.025 ? 1.06 : 1.0) * (1.0 - 0.28 * edge);
+  }
   diffuseColor.rgb = tc * tint;
 }
 #else
@@ -200,6 +207,7 @@ export function inkAware(material, o = {}) {
     uOutScale: { value: out ? out.scale : 1 },
     uOutTint: { value: new THREE.Vector3(...(out ? out.tint : [1, 1, 1])) },
     uOutSat: { value: out ? out.sat ?? 1 : 1 },
+    uOutBatten: { value: out && out.batten ? 1 : 0 },
   };
   if (map) material.defines = { ...(material.defines || {}), INK_MAP: '' };
   material.onBeforeCompile = (shader) => {
@@ -210,7 +218,7 @@ export function inkAware(material, o = {}) {
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', '#include <common>\n' + DECL +
         'uniform float uBackInk; uniform float uGlass; uniform sampler2D uMap; uniform float uScale; uniform float uRot; uniform vec3 uTint; uniform float uSat;\n' +
-        'uniform float uHasOut; uniform sampler2D uOutMap; uniform float uOutScale; uniform vec3 uOutTint; uniform float uOutSat;\n')
+        'uniform float uHasOut; uniform sampler2D uOutMap; uniform float uOutScale; uniform vec3 uOutTint; uniform float uOutSat; uniform float uOutBatten;\n')
       .replace('#include <clipping_planes_fragment>', '#include <clipping_planes_fragment>\n' + EARLY)
       .replace('#include <map_fragment>', MAPFRAG)
       .replace('#include <dithering_fragment>', INKMIX);
@@ -261,8 +269,8 @@ export function makeMaterials() {
   ['oak', 'walnut', 'marble', 'plaster', 'siding', 'grass', 'concrete', 'linen', 'rug', 'leather', 'bark', 'stone'].forEach((n) => (T[n] = tex(n)));
   const std = (p) => new THREE.MeshStandardMaterial({ roughness: 0.8, metalness: 0, envMapIntensity: 0.045, ...p });
   const M = {};
-  // walls: plaster inside, dark board siding on any face that looks outside
-  M.wall = inkAware(std({ roughness: 0.92 }), { map: T.plaster, scale: 2.4, tint: [1.22, 1.2, 1.16], sat: 0.25, out: { map: T.concrete, scale: 2.6, tint: [1.62, 1.58, 1.5], sat: 0.12 } });
+  // walls: plaster inside, white board-and-batten siding (A2.x) on any face that looks outside
+  M.wall = inkAware(std({ roughness: 0.92 }), { map: T.plaster, scale: 2.4, tint: [1.22, 1.2, 1.16], sat: 0.25, out: { map: T.plaster, scale: 3.2, tint: [1.72, 1.7, 1.66], sat: 0.06, batten: true } });
   M.oak = inkAware(std({ roughness: 0.55 }), { map: T.oak, scale: 2.2, rot: true, tint: [1.15, 1.08, 1.0], sat: 0.85, backInk: false });
   M.deck = inkAware(std({ roughness: 0.7 }), { map: T.oak, scale: 1.7, rot: false, tint: [0.92, 0.86, 0.8], sat: 0.45, backInk: false });
   M.walnut = inkAware(std({ roughness: 0.5 }), { map: T.walnut, scale: 1.2, tint: [0.78, 0.6, 0.46], sat: 1.4 });
