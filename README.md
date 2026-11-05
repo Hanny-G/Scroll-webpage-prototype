@@ -17,7 +17,7 @@ The plan is not an image. It is a real 3D model of the house, cut by a clipping 
 You need any local web server, because browsers block modules and textures loaded from a double-clicked file.
 
 ```bash
-cd plan-house
+cd Scroll-webpage-prototype
 python3 -m http.server 8000
 ```
 

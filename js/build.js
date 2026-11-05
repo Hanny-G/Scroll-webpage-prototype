@@ -210,7 +210,7 @@ export function buildHouse(M) {
   // ---- furniture -----------------------------------------------------------------
   // great room: sofa with its back to the stair, two armchairs, coffee table, rug
   box('rug', 3.0, 1.5, 14.2, 9.4, 0, 0.04, { lines: true });
-  sofa(8.4, 7.0, 7.4, 3.0, 180);
+  sofa(8.4, 7.0, 7.4, 3.0, 0);
   armchair(3.6, 3.4, 90);
   armchair(13.4, 3.4, -90);
   cyl('walnut', 8.5, 3.6, 1.6, 1.6, 0.04, 1.35, 32); // round coffee table
@@ -224,9 +224,10 @@ export function buildHouse(M) {
   // foyer: a round rug, a console, a big pendant
   cyl('rug', 23.2, 13.0, 4.2, 4.2, 0, 0.04, 48);
   box('walnut', 17.0, 14.5, 18.4, 19.5, 0, 2.7);
-  cyl('brass', 23.2, 13.0, 1.4, 0.2, 6.6, 7.2, 24);
-  cyl('lamp', 23.2, 13.0, 1.25, 1.25, 6.45, 6.6, 24, { lines: false });
-  cyl('black', 23.2, 13.0, 0.03, 0.03, 7.2, CEIL, 6, { lines: false });
+  // drum bottom at 7'-8": above the 5'-2" eye line, so it doesn't block the view in
+  cyl('brass', 23.2, 13.0, 1.1, 0.2, 7.75, 8.25, 24);
+  cyl('lamp', 23.2, 13.0, 1.0, 1.0, 7.65, 7.75, 24, { lines: false });
+  cyl('black', 23.2, 13.0, 0.03, 0.03, 8.25, CEIL, 6, { lines: false });
 
   // dining: an 8' table with eight chairs
   box('walnut', 33.95, 3.65, 41.95, 7.15, 2.35, 2.5);
