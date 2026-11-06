@@ -1,6 +1,6 @@
 // The house, as numbers.
 //
-// Traced from the permit set dated July 3, 2026 (Clayborn Engineering): sheet A1.2 "Proposed Main Floor Plan", A1.3 "Proposed Second Floor
+// Traced from Clayborn's permit drawing set (July 2026): sheet A1.2 "Proposed Main Floor Plan", A1.3 "Proposed Second Floor
 // Plan", A2.1-A2.4 elevations and A3.1-A3.2 roof plans, all at 1/4" = 1'-0".
 // The wall positions below were read from the drawing's own vector geometry,
 // so they are exact to the drawing, not measured off a picture.
@@ -14,13 +14,14 @@
 
 export const FT = 0.3048; // metres per foot
 
-export const PAPER = '#f2efe8';
+export const PAPER = '#f6f5f2'; // Clayborn sheets are white paper
 export const INK = '#16161a';
-export const ACCENT = '#b3302e'; // the red of the annotations on the drawing
+export const ACCENT = '#ad1c33'; // Clayborn red, sampled from the drawings' annotation and logo colour
 
 export const CEIL = 8; // main floor ceiling, 8'-0" (A2.x "main floor ceiling line")
 export const F2 = 9.17; // second floor finish, 8'-0" + 1'-2" floor structure
-export const EAVE = 17.6; // top of the second floor walls, where the roofs start
+export const EAVE = 18.5; // where the roof planes cross the wall line: 8'-0" ceiling + raised truss heel.
+// Checked against A2.1: east ridge 31'-8", west 26'-10", middle 24'-2", as drawn.
 export const LAWN = -5.6; // the yard south of the deck sits nine risers below the deck
 export const DECK = -0.2; // top of the composite deck
 export const CUT_PLAN = 3.94; // 1.2 m: where an architect cuts a plan
@@ -105,6 +106,37 @@ export const WALLS_UP = [
   { ...UP, ax: 'n', c: 30.03, a: 22.0, b: 32.33, ops: [] },
 ];
 
+// Second-floor partitions (A1.3), as boxes [X0, N0, X1, N1], read from the drawing's
+// vector geometry like the walls above. Gaps between them are the doors.
+export const WALLS_UP_INT = [
+  [37.17, 0.46, 37.47, 1.5], [37.17, 4.17, 37.47, 5.17], [30.26, 5.25, 38.47, 5.45], [41.47, 5.17, 42.76, 5.45],
+  [42.47, 5.45, 42.76, 9.75], [16.21, 9.75, 26.47, 10.04], [29.47, 9.75, 34.84, 10.04], [38.34, 9.75, 38.63, 21.5],
+  [42.47, 9.75, 42.76, 10.87], [16.21, 10.04, 16.5, 21.54], [30.01, 10.04, 30.3, 14.23], [34.55, 10.04, 34.84, 17.96],
+  [42.47, 10.87, 55.67, 11.33], [42.47, 11.33, 42.76, 13.83], [4.0, 13.36, 4.29, 17.31], [27.13, 15.0, 30.3, 15.29],
+  [27.13, 15.29, 27.43, 16.47], [30.01, 15.29, 30.3, 21.5], [4.0, 17.31, 12.0, 17.61], [42.47, 17.33, 55.67, 17.62],
+  [4.0, 17.61, 4.29, 21.31], [27.13, 19.75, 27.43, 21.54], [4.0, 21.31, 12.0, 21.61], [41.97, 21.5, 45.59, 21.79],
+  [30.26, 21.54, 38.97, 21.79], [11.71, 21.61, 12.0, 25.11], [42.47, 21.79, 42.76, 26.68], [45.3, 21.79, 45.59, 23.0],
+  [0.46, 25.11, 12.67, 25.57], [15.67, 25.11, 16.21, 25.57], [45.3, 25.66, 45.59, 26.71], [42.47, 26.71, 45.59, 26.93],
+  [42.47, 26.99, 42.76, 28.16], [45.3, 26.99, 45.59, 31.87], [42.47, 30.83, 42.76, 31.87],
+];
+
+// Second-floor room names, as they read on A1.3.
+export const LABELS_UP = [
+  { t: 'GAME ROOM', X: 8.2, N: 8.6 },
+  { t: 'BATHROOM-02', X: 6.4, N: 28.4 },
+  { t: 'CLOSET', X: 8.0, N: 19.4, small: true },
+  { t: 'BEDROOM-05', X: 21.8, N: 15.4 },
+  { t: 'HALLWAY', X: 29.4, N: 7.6 },
+  { t: 'BEDROOM-02', X: 36.6, N: 26.6 },
+  { t: 'BEDROOM-03', X: 50.6, N: 26.6 },
+  { t: 'BATHROOM-03', X: 49.0, N: 14.4 },
+  { t: 'BEDROOM-04', X: 49.6, N: 5.4 },
+  { t: 'WALK-IN CLOSET', X: 33.4, N: 2.8, small: true },
+  { t: 'CLOSET', X: 44.0, N: 29.4, small: true },
+  { t: 'CLOSET', X: 44.0, N: 24.4, small: true },
+  { t: 'CLOSET', X: 28.6, N: 18.2, small: true },
+];
+
 // Roofs (A3.1, A3.2). Pitch is rise per foot of run; overhangs are 1'-4".
 export const ROOFS = {
   oh: 1.33,
@@ -122,12 +154,60 @@ export const ROOFS = {
 // materials sweep in along `dir` (in plan: [dX, dN]).
 // Index 0 is "outside": everything not inside the house footprint.
 // ---------------------------------------------------------------------------
+// y = [floor, ceiling] in feet: rooms are stacked, so each is a box in plan and a band in height.
+export const BASE_FLOOR = -9.17; // basement floor finish: 8'-0" + 1'-2" below the main floor
+export const BASE_CEIL = -1.17; // 8'-0" flat ceiling from the basement floor (A1.2)
 export const WALK = [
   { key: 'out', name: 'OUTSIDE' },
-  { key: 'foyer', box: [16.36, 5.23, 30.15, 21.75], dir: [0, 1] },
+  { key: 'foyer', box: [16.36, 5.23, 30.15, 21.75], dir: [0, 1], tint: [0.68, 0.84, 1.02] }, // pale coastal blue walls
   { key: 'great', box: [0, 0, 16.36, 25.25], dir: [-1, 0] },
-  { key: 'kitchen', box: [30.15, 0, 56.13, 15.19], dir: [1, 0] },
+  { key: 'kitchen', box: [30.15, 0, 56.13, 15.19], dir: [1, 0], tint: [0.7, 0.84, 1.0] }, // pale blue walls
+  // the rest of the main floor: bedroom suite and pantry, mud room and stair hall, garage
+  { key: 'kitchen', box: [30.15, 15.19, 56.13, 32.33], dir: [0, 1] },
+  { key: 'great', box: [0, 25.25, 16.36, 32.23], dir: [0, 1] },
+  { key: 'great', box: [0, 32.23, 23.0, 55.77], dir: [0, 1] },
+  // the east stair well, from the basement to the second floor: it reveals with the kitchen
+  { key: 'kitchen', box: [30.15, 10.4, 38.63, 21.6], dir: [0, 1], y: [-9.17, 17.17] },
+  // the whole second floor reveals as one, in its three blocks
+  { key: 'upper', box: [0, 0, 16.67, 32.23], dir: [0, -1], y: [9.17, 17.17] },
+  { key: 'upper', box: [16.67, 5.0, 29.8, 22.0], dir: [0, -1], y: [9.17, 17.17] },
+  { key: 'upper', box: [29.8, 0, 56.13, 32.33], dir: [0, -1], y: [9.17, 17.17] },
+  // the basement, under the east block only
+  { key: 'lower', box: [29.8, 0, 56.13, 32.33], dir: [0, -1], y: [BASE_FLOOR, BASE_CEIL] },
 ];
+
+// ---------------------------------------------------------------------------
+// Basement (A1.2, left): 14" concrete walls on three sides, a framed walk-out
+// wall to the lake (W1 · D1 · W1), mechanical room, laundry, half bath, the
+// L-shaped stair and a big open space. Measured off the drawing.
+// ---------------------------------------------------------------------------
+const C = 1.17; // 14" concrete
+const BB = { y0: BASE_FLOOR, y1: BASE_CEIL };
+export const WALLS_BASE = [
+  { ...BB, ax: 'n', c: 29.8 + C / 2, a: 0, b: 32.33, t: C, ops: [] }, // west, concrete
+  { ...BB, ax: 'n', c: 56.13 - C / 2, a: 0, b: 32.33, t: C, ops: [{ a: 3.0, b: 10.0, k: 'window', sill: 0.6 }] }, // east, egress window
+  { ...BB, ax: 'x', c: 32.33 - C / 2, a: 29.8, b: 56.13, t: C, ops: [] }, // north, concrete
+  { ...BB, ax: 'x', c: 0.23, a: 29.8, b: 56.13, t: 0.46, ops: [{ a: 33.2, b: 35.7, k: 'window' }, { a: 40.0, b: 46.0, k: 'slider', open: 'w' }, { a: 50.9, b: 53.4, k: 'window' }] }, // walk-out to the lake
+  { ...BB, ax: 'x', c: 21.6, a: 30.97, b: 42.85, t: 0.35, ops: [{ a: 39.0, b: 42.4, k: 'door' }] }, // mechanical room, south
+  { ...BB, ax: 'n', c: 42.85, a: 21.6, b: 31.16, t: 0.35, ops: [] }, // mechanical / laundry
+  { ...BB, ax: 'x', c: 25.8, a: 42.85, b: 54.96, t: 0.35, ops: [{ a: 43.0, b: 46.4, k: 'door' }] }, // laundry, south
+  { ...BB, ax: 'n', c: 49.5, a: 20.2, b: 25.8, t: 0.35, ops: [{ a: 20.7, b: 23.8, k: 'door' }] }, // half bath, west
+  { ...BB, ax: 'x', c: 20.2, a: 49.5, b: 54.96, t: 0.35, ops: [] }, // half bath, south
+  { ...BB, ax: 'n', c: 34.7, a: 10.6, b: 17.64, t: 0.29, ops: [] }, // between the two stair runs
+  { ...BB, ax: 'n', c: 38.6, a: 10.6, b: 21.6, t: 0.35, ops: [] }, // stair east wall (the TV wall)
+];
+export const LABELS_BASE = [
+  { t: 'OPEN SPACE', X: 46.0, N: 7.4 },
+  { t: 'MECHANICAL ROOM', X: 36.8, N: 26.6 },
+  { t: 'LAUNDRY ROOM', X: 49.0, N: 29.2, small: true },
+  { t: 'HALF BATH-01', X: 52.3, N: 22.9, small: true },
+];
+
+// Openings in the floors for the stairs: [X0, N0, X1, N1].
+export const WELLS = {
+  up: [[0.46, 13.36, 4.0, 21.61], [4.0, 21.61, 11.33, 25.11], [31.02, 10.97, 38.34, 21.36]], // second floor, over both stairs
+  down: [[31.02, 10.97, 38.34, 21.36]], // main floor, over the stair to the basement
+};
 
 // The house footprint (anything here that is not a walk room stays ink).
 export const HOUSE = [
@@ -160,14 +240,14 @@ export const LABELS = [
 export const SWINGS = [
   { X: 15.5, N: 31.77, r: 3, closed: 180, open: 270, room: 'none' }, // D2 mud room to garage
   { X: 20.0, N: 32.23, r: 3, closed: 180, open: 90, room: 'none' }, // D2 garage to the north deck
-  { X: 24.73, N: 22.0, r: 3, closed: 180, open: 90, room: 'foyer' }, // D3 foyer to the north deck
+  { X: 24.73, N: 21.5, r: 3, closed: 180, open: 268, room: 'foyer' }, // D3 front door, swung open against the foyer wall (A1.2)
   { X: 42.5, N: 22.5, r: 3, closed: 90, open: 180, room: 'none' }, // D2 bedroom
   { X: 46.8, N: 21.33, r: 3, closed: 90, open: 0, room: 'none' }, // D2 bathroom
 ];
 
 // Barn doors (D4 pantry, D7 bedroom closet), drawn slid open beside their openings.
 export const BARN = [
-  { X0: 46.28, X1: 46.43, N0: 12.85, N1: 15.85 }, // pantry, on the kitchen side
+  { X0: 46.28, X1: 46.43, N0: 18.9, N1: 20.5 }, // pantry, slid open along the hall wall
   { X0: 42.36, X1: 42.49, N0: 27.15, N1: 29.15 }, // closet, on the bedroom side
 ];
 
@@ -192,20 +272,18 @@ export const RAIL_POSTS = [0, 4.08, 8.0, 11.92, 16.0, 19.1, 27.1, 30.2, 37.75, 4
 export const PORCH_POSTS = [0.3, 8.0, 16.0, 30.2, 37.75, 48.3, 55.7];
 
 // Trees around the house. r = canopy radius (ft).
+// They stand well back (beyond the camera's sweep round the house), framing it rather
+// than blocking it: woods behind on the street side and along both neighbours, open to the lake.
 export const TREES = [
-  { X: -18, N: -8, r: 9, h: 26, seed: 1 },
-  { X: -19, N: 22, r: 10, h: 30, seed: 2 },
-  { X: -17, N: 50, r: 8, h: 24, seed: 3 },
-  { X: 76, N: -6, r: 10, h: 30, seed: 4 },
-  { X: 75, N: 24, r: 8, h: 24, seed: 5 },
-  { X: -8, N: -42, r: 7, h: 22, seed: 6 },
-  { X: 56, N: -42, r: 8, h: 26, seed: 7 },
-  { X: 42, N: 66, r: 9, h: 28, seed: 8 },
+  { X: -105, N: 40, r: 13, h: 38, seed: 1 }, { X: -118, N: 5, r: 12, h: 34, seed: 2 }, { X: -95, N: 80, r: 14, h: 40, seed: 3 },
+  { X: -60, N: 125, r: 13, h: 36, seed: 4 }, { X: -15, N: 140, r: 14, h: 42, seed: 5 }, { X: 35, N: 150, r: 13, h: 38, seed: 6 },
+  { X: 85, N: 140, r: 14, h: 40, seed: 7 }, { X: 135, N: 95, r: 13, h: 36, seed: 8 }, { X: 150, N: 50, r: 12, h: 34, seed: 9 },
+  { X: 160, N: 5, r: 13, h: 38, seed: 10 }, { X: -125, N: -35, r: 11, h: 30, seed: 11 }, { X: 175, N: -38, r: 12, h: 32, seed: 12 },
 ];
 
 export const PROJECT = {
   title: 'Residential New Construction',
-  place: 'The Lake House',
+  place: 'The Lake House', // placeholder: the client's name and address stay off the page
   sheet: 'A1.2',
   drawing: 'Proposed Main Floor Plan',
   scale: '1/4" = 1\'-0"',

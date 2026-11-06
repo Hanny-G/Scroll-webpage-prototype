@@ -2,16 +2,27 @@
 
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
-import { FT, PAPER, LAWN } from './plan.js';
-import { CUT, U, setReveal, reveal, makeMaterials, inkLines, texturesReady } from './materials.js';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
+import { FT, PAPER, LAWN, ACCENT } from './plan.js';
+import { CUT, CUTLOW, U, setReveal, reveal, makeMaterials, inkLines, texturesReady } from './materials.js';
 import { buildHouse } from './build.js';
 import { buildSheet } from './sheet.js';
 import { makeRig } from './rig.js';
-import { ROUTES, pickRoute } from './routes.js';
+import { ROUTES, pickRoute, pickOpening } from './routes.js';
+import { buildElevation } from './elevation.js';
+import { buildUpper } from './upper.js';
+import { buildTerrain, buildWater } from './terrain.js';
+import { makeTourRig } from './tour.js';
+import { buildTourUI } from './tour-ui.js';
+import { loadModels, b64 } from './models.js';
 
 const params = new URLSearchParams(location.search);
 const CAPTURE = params.has('capture');
 const ROUTE = ROUTES[pickRoute()];
+const OPENING = pickOpening(); // 'plan' or 'elevation'
+const ELEV = OPENING === 'elevation';
+const ROOFO = OPENING === 'roof';
+const TOUR = OPENING === 'tour'; // the Clayborn presentation
 const errors = [];
 window.addEventListener('error', (e) => errors.push(String(e.message)));
 
@@ -26,7 +37,8 @@ try {
   document.getElementById('nogl').hidden = false;
   throw e;
 }
-renderer.setPixelRatio(params.has('pr') ? +params.get('pr') : Math.min(window.devicePixelRatio || 1, 2));
+const DPR = window.devicePixelRatio || 1;
+renderer.setPixelRatio(params.has('pr') ? +params.get('pr') : innerWidth >= 900 ? Math.min(2, Math.max(1.5, DPR)) : Math.min(DPR, 2));
 renderer.localClippingEnabled = true;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -43,25 +55,39 @@ camera.rotation.order = 'YXZ';
 
 const pmrem = new THREE.PMREMGenerator(renderer);
 scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-scene.environmentIntensity = 0.12; // a little studio fill; the sun and sky do the real work
+scene.environmentIntensity = 0.24; // a little studio fill; the sun and sky do the real work
+// then a real evening sky (Poly Haven, CC0) for natural reflections on glass, metal and the models
+// (shipped as base64 in JSON, since some hosts won't serve .hdr files)
+fetch('assets/hdri/evening_meadow_1k.json').then((r) => r.json()).then(({ hdr }) => {
+  const d = new RGBELoader().parse(b64(hdr).buffer);
+  const tex = new THREE.DataTexture(d.data, d.width, d.height, THREE.RGBAFormat, d.type);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.LinearSRGBColorSpace;
+  tex.minFilter = tex.magFilter = THREE.LinearFilter;
+  tex.flipY = true;
+  tex.needsUpdate = true;
+  scene.environment = pmrem.fromEquirectangular(tex).texture;
+  scene.environmentIntensity = 0.32;
+  tex.dispose();
+}).catch(() => {});
 
 // light: late afternoon sun, low in the south-west, so it rakes across the
 // deck and in through the south windows
-const sun = new THREE.DirectionalLight('#ffd4a0', 6.2);
+const sun = new THREE.DirectionalLight('#ffe2c0', 5.6);
 const centre = new THREE.Vector3(26 * FT, 0, -12 * FT);
 sun.position.copy(centre).add(new THREE.Vector3(-0.5, 0.34, 0.8).normalize().multiplyScalar(60));
 sun.target.position.copy(centre);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(4096, 4096); // crisp shadows from furniture and railings
 Object.assign(sun.shadow.camera, { left: -26, right: 26, top: 26, bottom: -26, near: 1, far: 140 });
 sun.shadow.bias = -0.0004;
 sun.shadow.normalBias = 0.03;
 scene.add(sun, sun.target);
-const hemi = new THREE.HemisphereLight('#dfe7f2', '#9a8468', 0.75);
+const hemi = new THREE.HemisphereLight('#e4ecf5', '#a89a84', 1.15);
 scene.add(hemi);
 // warm lamps inside, so the rooms glow against the dusk
 const lamps = [
-  [23.2, 5.6, 13.0, 5],
+  [23.25, 6.9, 15.5, 8], // the chandelier
   [8.5, 7.0, 5.0, 7],
   [38.0, 6.0, 5.4, 6],
   [48.3, 6.0, 6.6, 6],
@@ -101,32 +127,55 @@ scene.add(sky);
 const M = makeMaterials();
 const house = buildHouse(M);
 scene.add(house.group);
+// real furniture, lights and plants (Poly Haven, CC0); their outlines join the house's ink lines
+const models = await loadModels();
+scene.add(models.group);
+for (let i = 0; i < models.edges.length; i++) house.edges.push(models.edges[i]);
 
-// the yard: paper while it is a drawing, grass once the outside sweeps in
-const yard = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), M.grass);
-yard.rotation.x = -Math.PI / 2;
-yard.position.set(26 * FT, LAWN * FT - 0.005, -12 * FT);
-yard.receiveShadow = true;
+// the lot, falling to the lake: paper while it is a drawing, grass and water once the outside sweeps in
+const yard = buildTerrain(M.grass);
 scene.add(yard);
+const lake = buildWater(M.water);
+scene.add(lake);
 
 const lineMat = inkLines(0.92);
-const lineMatOut = inkLines(0.85, { clip: false });
+// the yard's dimension strings and plan title: Clayborn red, like the drawings
+const lineMatOut = new THREE.LineBasicMaterial({ color: ACCENT, transparent: true, opacity: 0.85, depthWrite: false, toneMapped: false });
 const sheet = buildSheet({ planesFor: () => [CUT], anisotropy: renderer.capabilities.getMaxAnisotropy() });
 scene.add(sheet.group);
 sheet.mk([...house.edges, ...sheet.lines.ink], lineMat);
-sheet.mk([...sheet.lines.out], lineMatOut);
-sheet.mk(house.treeEdges, inkLines(0.55, { clip: false }));
+const yardLines = sheet.mk([...sheet.lines.out], lineMatOut);
+const treeLines = sheet.mk(house.treeEdges, inkLines(0.55, { clip: false }));
+const trees = [treeLines, ...house.group.children.filter((m) => /^(bark|leaf|leaf2)$/.test(m.name))];
+
+// the elevation opening: sheet A2.1's drafting layer, and no floor-plan graphics on the yard
+const elev = ELEV ? buildElevation({ anisotropy: renderer.capabilities.getMaxAnisotropy() }) : null;
+if (elev) {
+  scene.add(elev.group);
+  yardLines.visible = false;
+}
+// the roof-plan opening: the roof drafting above the ridges and the second-floor names
+const upper = ROOFO || TOUR ? buildUpper({ anisotropy: renderer.capabilities.getMaxAnisotropy() }) : null;
+if (upper) scene.add(upper.group);
+// the front door swings on its own hinge
+scene.add(house.door);
+house.door.add(new THREE.LineSegments(house.doorEdges, lineMat));
 const cableMat = new THREE.LineBasicMaterial({ color: '#2a2a2c', transparent: true, opacity: 0.75 });
 sheet.mk(house.cables, cableMat);
 
 // ---------------------------------------------------------------------------
 // one frame
 // ---------------------------------------------------------------------------
-let rig = makeRig(innerWidth / innerHeight, ROUTE);
+const newRig = (aspect) => (TOUR ? makeTourRig(aspect) : makeRig(aspect, ROUTE, OPENING));
+let rig = newRig(innerWidth / innerHeight);
+const ui = TOUR ? buildTourUI() : null;
 const hud = { lens: document.getElementById('hud-lens'), height: document.getElementById('hud-height'), cut: document.getElementById('hud-cut') };
 // the rail lists the rooms in the order this route visits them
 const railEl = document.getElementById('rail');
-railEl.innerHTML = [['01 Sheet', 0], ['02 Cut', 0.05], ['03 Descent', 0.3], ...ROUTE.rail]
+const opening = ELEV ? [['01 Elevation', 0], ['02 Turn', 0.05], ['03 Descent', 0.3]]
+  : ROOFO ? [['01 Roof', 0], ['02 Second floor', 0.08], ['03 Main floor', 0.2]]
+  : [['01 Sheet', 0], ['02 Cut', 0.05], ['03 Descent', 0.3]];
+railEl.innerHTML = [...opening, ...ROUTE.rail]
   .map(([t, at]) => `<span data-at="${at}">${t}</span>`).join('');
 const rail = [...railEl.querySelectorAll('span')];
 const grain = document.getElementById('grain');
@@ -144,17 +193,38 @@ function draw(s) {
   camera.updateProjectionMatrix();
   sky.position.copy(camera.position);
   CUT.constant = o.cut;
+  renderer.toneMappingExposure = o.exposure ?? 1.05;
+  house.door.rotation.y = (((o.doorAngle ?? 268) - 180) * Math.PI) / 180;
+  CUTLOW.constant = o.cutLow;
   scene.fog.near = o.fogNear;
   scene.fog.far = o.fogFar;
   skyMat.uniforms.uSky.value = o.sky;
-  setReveal('out', o.out, [-60, 70]);
+  setReveal('out', o.out, TOUR ? [-260, 320] : [-60, 70]);
   setReveal('foyer', o.foyer);
   setReveal('great', o.great);
   setReveal('kitchen', o.kitchen);
+  setReveal('upper', o.upper ?? 0);
+  setReveal('lower', o.lower ?? 0);
   for (const l of sheet.labels) {
     const r = l.room === 'none' ? 0 : reveal[l.room] ?? 0;
-    l.mesh.material.opacity = 1 - Math.min(1, r * 1.6);
-    l.mesh.visible = l.mesh.material.opacity > 0.01;
+    l.mesh.material.opacity = (1 - Math.min(1, r * 1.6)) * (l.plan || l.room === 'out' ? o.planLab : 1);
+    l.mesh.visible = l.mesh.material.opacity > 0.01 && !(ELEV && l.plan);
+  }
+  if (upper) {
+    upper.setRoof(o.roofLab);
+    upper.setUpper(o.upLab);
+    upper.setLower(o.lowLab ?? 0);
+    // the floor plan's yard graphics wait until the cut reaches the main floor
+    yardLines.visible = o.planLab > 0.01;
+    lineMatOut.opacity = 0.85 * o.planLab;
+  }
+  if (elev) {
+    elev.setFade(o.elev);
+    // the elevation shows only the house: the trees come in once the camera is round the
+    // east end, so the two trees on that side never sit in front of the house
+    for (const t of trees) t.visible = s > 0.34;
+    // seen dead level, the yard plane is a sliver across the cut ground: leave it out until the camera moves
+    yard.visible = o.elev < 0.5;
   }
   // shadows only matter once something is lit: refresh them when the cut moves
   const lit = o.out > 0 || o.foyer > 0;
@@ -164,6 +234,7 @@ function draw(s) {
     shadowsDirty = key;
   }
   renderer.render(scene, camera);
+  if (ui) ui.update(o, camera);
 
   hud.lens.textContent = o.fov.toFixed(1) + '°';
   const ft = o.y / FT - LAWN;
@@ -179,13 +250,36 @@ function draw(s) {
 function layout() {
   renderer.setSize(innerWidth, innerHeight, false);
   camera.aspect = innerWidth / innerHeight;
-  rig = makeRig(camera.aspect, ROUTE);
+  rig = newRig(camera.aspect);
 }
 
 // ---------------------------------------------------------------------------
 // scroll: Lenis smooths the wheel, ScrollTrigger maps the page to s = 0..1,
 // and a GSAP timeline carries s plus the captions
 // ---------------------------------------------------------------------------
+// the elevation opening tells its own story in the first few captions
+if (ELEV) {
+  const set = (sel, html) => { const el = document.querySelector(sel); if (el) el.innerHTML = html; };
+  set('#hero .eyebrow', 'Sheet A2.1 <span class="wide">&nbsp;·&nbsp; Proposed front elevation</span> &nbsp;·&nbsp; 1/4" = 1&#39;-0"');
+  set('#hero .lede', 'This drawing is not a picture of the house. It is the house, seen square-on from the street through a 2° lens. Scroll, and walk round to the back.');
+  set('#titleblock div:nth-child(2) dd', 'A2.1 · Proposed Front Elevation');
+  set('#cap-cut .no', '02 &nbsp; Turning the corner');
+  set('#cap-cut .say', 'Step off the street and the elevation turns: the drawing was the house all along.');
+  set('#cap-down .no', '03 &nbsp; Round to the deck');
+  set('#cap-down .say', 'The lens opens from 2° to a human field of view, round the garage to the covered deck. Everything ahead is still ink.');
+}
+
+if (ROOFO) {
+  const set = (sel, html) => { const el = document.querySelector(sel); if (el) el.innerHTML = html; };
+  set('#hero .eyebrow', 'Sheets A3.1 + A3.2 <span class="wide">&nbsp;·&nbsp; Proposed roof plans</span> &nbsp;·&nbsp; 1/4" = 1&#39;-0"');
+  set('#hero .lede', 'This drawing is not a picture of the house. It is the house, seen from straight above with the roofs on. Scroll, and take it apart floor by floor.');
+  set('#titleblock div:nth-child(2) dd', 'A3.1 · A3.2 · Proposed Roof Plans');
+  set('#cap-cut .no', '02 &nbsp; The second floor &nbsp; A1.3');
+  set('#cap-cut .say', 'The cut comes down through the roofs: a game room, four bedrooms and two baths under the gables.');
+  set('#cap-down .no', '03 &nbsp; The main floor &nbsp; A1.2');
+  set('#cap-down .say', 'One floor further down, the plan you walk. Then the walls grow back and the camera comes down to the deck.');
+}
+
 const proxy = { s: 0 };
 const tl = gsap.timeline({ paused: true, defaults: { ease: 'none' } });
 tl.to(proxy, { s: 1, duration: 1 }, 0);
@@ -194,8 +288,13 @@ const cap = (sel, a, b) => {
   tl.fromTo(sel, { autoAlpha: 0, y: 22 }, { autoAlpha: 1, y: 0, duration: 0.025 }, a);
   if (b) tl.to(sel, { autoAlpha: 0, y: -14, duration: 0.025 }, b);
 };
-cap('#cap-cut', 0.08, 0.26);
-cap('#cap-down', 0.33, 0.46);
+if (ROOFO) {
+  cap('#cap-cut', 0.085, 0.19);
+  cap('#cap-down', 0.215, 0.44);
+} else {
+  cap('#cap-cut', 0.08, 0.26);
+  cap('#cap-down', 0.33, 0.46);
+}
 for (const [k, [a, b]] of Object.entries(ROUTE.caps)) cap('#cap-' + k, a, b);
 
 let drawn = -1;
@@ -246,7 +345,7 @@ async function boot() {
   });
   // switching #route-a … #route-d rebuilds the page with that walk
   window.addEventListener('hashchange', () => {
-    if (/^#route-[a-z]$/.test(location.hash)) location.reload();
+    if (/^#(route|elevation|roof)(-[a-z])?$/.test(location.hash)) location.reload();
   });
   window.__state = () => ({ ...last, errors, calls: renderer.info.render.calls, tris: renderer.info.render.triangles });
   document.getElementById('loading').classList.add('done');

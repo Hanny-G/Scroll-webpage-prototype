@@ -19,10 +19,29 @@ const [mode = 'shots', ...rest] = process.argv.slice(2);
 
 // time (s) -> scroll progress, for the video. Holds on the sheet at the start
 // and on the kitchen at the end; slower where there is more to look at.
-const KEYS = [
+const KEYS_PLAN = [
   [0, 0], [2.2, 0], [6.5, 0.05], [15, 0.3], [22.5, 0.5], [30, 0.675], [35, 0.765],
   [41, 0.86], [47, 0.95], [51.5, 1], [54, 1],
 ];
+// the roof opening has three drawings to show before the descent: hold on each
+const KEYS_ROOF = [
+  [0, 0], [3.0, 0.03], [6.0, 0.06], [8.5, 0.12], [11.5, 0.17], [14.5, 0.24], [17.0, 0.29],
+  [21.5, 0.4], [26.0, 0.5], [33.5, 0.675], [38.5, 0.765], [44.5, 0.86], [50.5, 0.95], [55, 1], [57.5, 1],
+];
+// the Clayborn presentation (the default): sheet, plans, arrival, rooms, up, down, outside, close
+const KEYS_TOUR = [
+  [0, 0], [2.5, 0.03], [5.5, 0.085], [6.6, 0.09], [8.0, 0.114], [8.6, 0.117], [10.0, 0.138], [10.6, 0.141], [12.0, 0.163],
+  [12.6, 0.166], [14.0, 0.19], [19.0, 0.27], [22.0, 0.3], [26.0, 0.342], [28.5, 0.364], [30.5, 0.38], [31.5, 0.386], [34.0, 0.398], [35.5, 0.412], [38.5, 0.438], [40.5, 0.452], [47.0, 0.526],
+  [50.0, 0.548], [52.5, 0.566], [55.0, 0.58], [60.5, 0.64], [63.0, 0.656], [65.5, 0.67], [72.0, 0.732], [76.0, 0.766],
+  [78.0, 0.78], [82.0, 0.815], [87.0, 0.85], [94.0, 0.9], [99.5, 0.955], [102.0, 0.972], [105.0, 0.99], [107.5, 1],
+];
+// the render presentation (PAGE=renders.html): site, four plans, four elevations, close
+const KEYS_RENDERS = [
+  [0, 0], [3.0, 0.03], [9.0, 0.11], [12.0, 0.16], [16.0, 0.22], [18.0, 0.25], [22.5, 0.32], [24.5, 0.35],
+  [29.5, 0.43], [31.5, 0.46], [36.0, 0.53], [39.0, 0.58], [45.0, 0.67], [47.0, 0.69], [52.0, 0.76],
+  [54.0, 0.78], [59.0, 0.85], [61.0, 0.87], [65.0, 0.92], [68.0, 0.945], [71.0, 0.97], [74.0, 1],
+];
+const KEYS = process.env.PAGE === 'renders.html' ? KEYS_RENDERS : process.env.OPEN === 'roof' ? KEYS_ROOF : ['plan', 'elevation'].includes(process.env.OPEN) || process.env.ROUTE ? KEYS_PLAN : KEYS_TOUR;
 function monotone(keys) {
   const n = keys.length, xs = keys.map((k) => k[0]), ys = keys.map((k) => k[1]);
   const d = [], m = new Array(n).fill(0);
@@ -71,8 +90,8 @@ if (process.env.VENDOR) {
   });
 }
 
-// ROUTE=a|b|c|d picks a walk-through variation (js/routes.js)
-await page.goto(`http://localhost:${PORT}/?capture=1${process.env.PR ? '&pr=' + process.env.PR : ''}${process.env.ROUTE ? '&route=' + process.env.ROUTE : ''}`);
+// ROUTE=a|b|c|d picks a walk-through variation (js/routes.js); OPEN=elevation opens on sheet A2.1
+await page.goto(`http://localhost:${PORT}/${process.env.PAGE || ''}?capture=1${process.env.PR ? '&pr=' + process.env.PR : ''}${process.env.ROUTE ? '&route=' + process.env.ROUTE : ''}${process.env.OPEN ? '&open=' + process.env.OPEN : ''}${process.env.PAGE ? '#capture' : ''}`);
 await page.waitForFunction(() => window.__ready === true, null, { timeout: 180000 });
 await page.waitForTimeout(800);
 fs.mkdirSync(OUT, { recursive: true });

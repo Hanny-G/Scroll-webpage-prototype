@@ -108,7 +108,18 @@ export const ROUTES = {
 // ?route=b, or #route-b (hosts that drop the query string, like a claude.ai artifact, keep the hash)
 export function pickRoute() {
   const q = new URLSearchParams(location.search).get('route');
-  const h = (location.hash.match(/^#route-([a-z])$/) || [])[1];
+  const h = (location.hash.match(/^#(?:route|elevation|roof)-([a-z])$/) || [])[1];
   const id = q || h;
   return ROUTES[id] ? id : 'a';
+}
+
+// How the page opens: 'plan' (the floor plan, sheet A1.2), 'elevation' (the front
+// elevation, A2.1) or 'roof' (the roof plans, A3.1 + A3.2, then down floor by floor).
+// ?open=elevation or ?open=roof, or #elevation / #roof (#roof-b for a route too).
+export function pickOpening() {
+  const q = new URLSearchParams(location.search).get('open');
+  const h = (location.hash.match(/^#(plan|elevation|roof)(-[a-z])?$/) || [])[1];
+  const id = q || h;
+  // the Clayborn presentation is the default; the earlier openings stay available by name
+  return id === 'elevation' || id === 'roof' || id === 'plan' ? id : 'tour';
 }

@@ -1,14 +1,22 @@
 # The Plan Is the House
 
-A scroll-driven 3D page built from the permit set for **Residential New Construction, The Lake House** (Clayborn Engineering, issued July 3, 2026). The main reference is sheet **A1.2, Proposed Main Floor Plan**. The second floor, elevations, roof plans and foundation plan in the same set fill in the outside of the house.
+A scroll-driven 3D page built from Clayborn's permit drawing set for a two-storey lake house (issued July 2026; the client's name and address are deliberately left out). The main reference is sheet **A1.2, Proposed Main Floor Plan**. The second floor, elevations, roof plans and foundation plan in the same set fill in the outside of the house.
 
-It opens on what looks like a flat, printed floor plan. When you scroll:
+By default it plays as **a Clayborn presentation** (`js/tour.js`, `js/tour-ui.js`):
 
-1. The walls rise out of the drawing.
-2. The second floor and the roofs close over and the camera comes down into the yard.
-3. You climb the deck stair under the covered porch and walk the main floor. There are four route options, A to D (see "Route options" below).
+1. **The sheet.** Clayborn's main floor plan with its title block, on a dark board.
+2. **Into the plans.** The camera zooms in; the lower, main and upper levels show in turn, then back to the main level.
+3. **Plan to house.** The cut opens, the house stands up, and the camera turns and comes down to the street side.
+4. **The front door,** and straight through the foyer to the lake.
+5. **The main level** (great room, dining and kitchen), **upstairs** to a lake-view bedroom, **downstairs** to the walk-out lower level and out onto the patio.
+6. **Outside.** A sweep round all four elevations, ending on the lake.
+7. **The close.** Clayborn, and a call to action.
 
-Each room stays a line drawing until the camera reaches it. Then the materials sweep in, lit by a low evening sun.
+The earlier openings are still there: `?open=plan` (the floor plan, then the deck-stair walk with routes A–D), `?open=elevation` (sheet A2.1) and `?open=roof` (A3.1/A3.2, then down floor by floor). On hosts that drop the query string, use `#plan`, `#elevation` or `#roof`.
+
+**Confidentiality.** The client's name and address are deliberately not on the page or in the code. The project is called "The Lake House" and the client "Private client". The engineer's seal isn't reproduced.
+
+**Branding.** The Clayborn mark in `tour-ui.js` is redrawn from the logo on the drawing set's title block. Swap in the official logo file when it's available. The red is sampled from the drawings (#ad1c33).
 
 The plan is not an image. It is a real 3D model of the house, cut by a clipping plane 1.2 m (3'-11") above the floor and seen from about 3,000 ft up through a 2° lens. At that distance there's no visible perspective, so the model reads as ink on paper.
 
@@ -81,6 +89,9 @@ The walk after the deck stair has four variations in `js/routes.js`. Pick one wi
 | `js/materials.js` | The ink shader: one material blends "paper and ink" with "real material", room by room. It also handles the clipping plane (the cut), world-space textures and soft corner shading. |
 | `js/sheet.js` | The drafting layer: room names, dimension strings, door swings, stair arrows, north arrow and drawing title, all lying flat in the 3D scene. |
 | `js/rig.js` | The camera as a function of scroll (0 → 1): lens, height, tilt, cut height, the descent, and the walk from the chosen route. |
+| `js/tour.js` | The Clayborn presentation: the camera, the cut and the reveals for the whole sequence, and its copy. |
+| `js/tour-ui.js` | The presentation's overlays: the printed sheet and title block, level names, captions and the closing card. |
+| `js/terrain.js` | The lot falling from the street to the lake, the basement patio and the water. |
 | `js/routes.js` | The four walk-through variations: camera keys, when each room reveals, caption timing and the rail. |
 | `js/main.js` | Renderer, lights, sky, the scroll wiring (Lenis + GSAP ScrollTrigger) and captions. |
 | `css/style.css`, `index.html` | Page layout, headline, captions, title block, progress rail. |
@@ -108,6 +119,8 @@ ffmpeg -framerate 30 -i review/frames/f%05d.jpg -c:v libx264 -pix_fmt yuv420p -c
 Add `?capture=1` to the URL to get the page in recording mode: no smooth scroll, and `window.__frame(s)` jumps to an exact scroll position.
 
 ## Credits
+
+- Furniture, lights, plants and decor in `assets/models` (dining table and chairs, chandelier, pendants, stools, lounge chairs, side tables, vases, basket, daybed, potted plants), surfaces in `assets/tex` (laminate floor, marble, lawn, hessian, sandstone) and the evening sky `assets/hdri/evening_meadow_1k.hdr`: [Poly Haven](https://polyhaven.com), CC0, 1K versions. Placed by `js/models.js`.
 
 - [three.js](https://threejs.org) 0.170, [GSAP](https://gsap.com) 3.12.5 + ScrollTrigger, [Lenis](https://lenis.darkroom.engineering) 1.1.14
 - Textures: CC0 scans from [Poly Haven](https://polyhaven.com), downsized to 1K

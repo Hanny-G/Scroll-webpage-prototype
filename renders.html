@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Clayborn · The Lake House</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="css/renders.css">
+</head>
+<body>
+  <div id="stage" aria-hidden="true">
+    <div id="backdrop"></div>
+    <!-- the plan stack: every render is pinned to the same plan coordinates (feet), so the levels line up -->
+    <div id="plan">
+      <img class="lay" id="L-site" src="assets/renders/site-aerial.webp" alt="">
+      <img class="lay" id="L-lower" src="assets/renders/plan-lower.webp" alt="">
+      <img class="lay" id="L-main" src="assets/renders/plan-main.webp" alt="">
+      <img class="lay" id="L-upper" src="assets/renders/plan-upper.webp" alt="">
+      <img class="lay" id="L-roof" src="assets/renders/roof.webp" alt="">
+    </div>
+    <div id="dim"></div>
+    <!-- the walk round the outside: rear (lake), east, front (street), west -->
+    <div id="elevs">
+      <div class="elev" id="E-rear"><img src="assets/renders/elev-rear.webp" alt=""></div>
+      <div class="elev" id="E-east"><img src="assets/renders/elev-east.webp" alt=""></div>
+      <div class="elev" id="E-front"><img src="assets/renders/elev-front.webp" alt=""></div>
+      <div class="elev" id="E-west"><img src="assets/renders/elev-west.webp" alt=""></div>
+      <div class="elev" id="E-close"><img src="assets/renders/elev-rear.webp" alt=""></div>
+    </div>
+  </div>
+
+  <header id="brand">
+    <svg class="mark" viewBox="0 0 120 88" aria-hidden="true">
+      <path d="M6 86 V30 L40 8 H80 L114 30 V86" fill="none" stroke="currentColor" stroke-width="11"/>
+      <path d="M27 86 V40 L49 26 H71 L93 40 V86" fill="none" stroke="currentColor" stroke-width="5"/>
+      <path d="M43 86 V50 L55 42 H65 L77 50 V86" fill="none" stroke="currentColor" stroke-width="4"/>
+    </svg>
+    <span class="word">CLAYBORN</span><span class="proj">The Lake House</span>
+  </header>
+
+  <div id="level"><span class="lv-t"></span><span class="lv-d"></span></div>
+  <div id="caps"></div>
+
+  <div id="close">
+    <div class="in">
+      <div class="logo">
+        <svg class="mark" viewBox="0 0 120 88" aria-hidden="true">
+          <path d="M6 86 V30 L40 8 H80 L114 30 V86" fill="none" stroke="currentColor" stroke-width="11"/>
+          <path d="M27 86 V40 L49 26 H71 L93 40 V86" fill="none" stroke="currentColor" stroke-width="5"/>
+          <path d="M43 86 V50 L55 42 H65 L77 50 V86" fill="none" stroke="currentColor" stroke-width="4"/>
+        </svg>
+        <span class="word">CLAYBORN</span>
+      </div>
+      <h2>Bring your next project into focus.</h2>
+      <p>From the first sketch to the sealed drawings, Clayborn designs and engineers homes that work as well as they look.</p>
+      <a class="cta" href="#" onclick="return false">Talk to Clayborn about your project</a>
+    </div>
+  </div>
+
+  <div id="progress"><i></i></div>
+  <p id="cue">Scroll</p>
+  <main id="track"></main>
+  <script type="module" src="js/renders.js"></script>
+</body>
+</html>

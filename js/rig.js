@@ -13,7 +13,7 @@
 //   6  great room       0.77 - 0.88
 //   7  dining, kitchen  0.88 - 1.00
 
-import { FT, CUT_PLAN, CEIL, LAWN, DECK, DECKS } from './plan.js';
+import { FT, CUT_PLAN, CEIL, F2, LAWN, DECK, DECKS } from './plan.js';
 import { ROUTES } from './routes.js';
 
 const io = (t) => t * t * (3 - 2 * t);
@@ -70,7 +70,9 @@ function groundAt(X, N) {
 
 const EYE = 5.2; // ft
 
-export function makeRig(aspect, route = ROUTES.a) {
+export function makeRig(aspect, route = ROUTES.a, opening = 'plan') {
+  const ELEV = opening === 'elevation';
+  const ROOF = opening === 'roof';
   const portrait = aspect < 0.9;
   const fovWalk = portrait ? 74 : aspect < 1.5 ? 60 : 54;
 
@@ -102,6 +104,48 @@ export function makeRig(aspect, route = ROUTES.a) {
   const fogN = track([[0, L(4000)], [s2, L(4000)], [s3, L(40), io]]);
   const fogF = track([[0, L(9000)], [s2, L(9000)], [s3, L(160), io]]);
 
+  // ---- or: the front elevation (A2.1), then round the east side to the deck ---------
+  // The camera starts on the street looking south through a 2° lens, so the model
+  // reads as the elevation drawing. Then it swings round the garage end (yaw 180 -> 0)
+  // while the lens opens, and lands in the same place as the plan opening.
+  const elevW = 98 * FT, elevH = 52 * FT; // the drawing incl. levels, dimensions and title
+  const eF0 = portrait ? (elevW / aspect) * 1.08 : Math.max(elevH * 1.15, (elevW / aspect) / 0.56);
+  const eCx = 39.5 * FT, eCy = 7.5 * FT, eCn = 27 * FT;
+  // looking south, a bigger X is further LEFT on screen: move the target +X to push the drawing right
+  const ex = portrait ? eCx : eCx + 0.2 * eF0 * aspect;
+  const ey = portrait ? eCy + 0.17 * eF0 : eCy;
+  const eYaw = track([[0, 180], [s1, 180], [s3, 0, io]]);
+  const ePitch = track([[0, 0], [s1, 0], [0.25, -14, io], [s3, 0, io]]);
+  const eFov = track([[0, L(T(2))], [s1, L(T(2))], [0.3, L(T(9)), io], [s3, L(T(fovWalk)), io5]]);
+  const eFrm = track([[0, L(eF0)], [s1, L(eF0)], [0.3, L(72 * FT), io], [s3, L(landFrame), io5]]);
+  const etx = track([[0, ex], [s1, ex], [0.3, 28 * FT, io], [s3, landX, io]]);
+  const ety = track([[0, ey], [s1, ey], [0.3, 9 * FT, io], [s3, landY, io]]);
+  const etz = track([[0, -eCn], [s1, -eCn], [0.3, -16 * FT, io], [s3, -landN - REST, io]]);
+
+  // ---- or: the roof plan (A3.1 + A3.2), taken apart floor by floor ---------------
+  // Straight overhead, as for the floor plan. The cut comes down through the roofs to
+  // 4 ft above the second floor (its plan, A1.3), then on down to the main floor plan,
+  // and from there the page carries on as the plan opening does: walls rise, camera lands.
+  const R1 = 0.28, R2 = 0.4; // camera holds overhead until R1, then tips back as in the plan opening
+  const rElev = track([[0, 90], [R1, 90], [R2, 34, early], [s3, 0, io]]);
+  const rFov = track([[0, L(T(2))], [R1, L(T(2))], [R2, L(T(4.8)), io], [s3, L(T(fovWalk)), io5]]);
+  const rFrm = track([[0, L(F0)], [R1, L(F0)], [R2, L(portrait ? 30 : 23), io], [s3, L(landFrame), io5]]);
+  const rtx = track([[0, cx], [R1, cx], [R2, 28 * FT, io], [s3, landX, io]]);
+  const rty = track([[0, 0], [R1, 0], [R2, 1.0, io], [s3, landY, io]]);
+  const rtz = track([[0, -cn], [R1, -cn], [R2, -13 * FT, io], [s3, -landN - REST, io]]);
+  const UPCUT = (F2 + CUT_PLAN) * FT;
+  const rCut = track([
+    [0, 60], [0.044, 60], [0.045, 34 * FT], // nothing stands above 34 ft, so this jump is invisible
+    [0.12, UPCUT, io], [0.17, UPCUT], // through the roofs and attics to the second floor plan
+    [0.245, CUT_PLAN * FT, io], [0.29, CUT_PLAN * FT], // on down to the main floor plan
+    [0.38, (CEIL - 0.35) * FT, io], [0.42, (CEIL - 0.3) * FT, lin], [0.47, 60, io], // and back up as the camera lands
+  ]);
+  const rFogN = track([[0, L(4000)], [R2, L(4000)], [s3, L(40), io]]);
+  const rFogF = track([[0, L(9000)], [R2, L(9000)], [s3, L(160), io]]);
+  const over = ROOF
+    ? { elev: rElev, fovL: rFov, frmL: rFrm, tx: rtx, ty: rty, tz: rtz }
+    : { elev, fovL, frmL, tx, ty, tz };
+
   // ---- stops 4-7: on foot. [s, X ft, N ft, yaw deg (+ = turn left / west), pitch deg]
   // The route (js/routes.js) decides the walk and when each room reveals.
   const W = route.walk;
@@ -117,19 +161,38 @@ export function makeRig(aspect, route = ROUTES.a) {
   function at(sIn) {
     const s = clamp01(sIn);
     const o = { s };
-    o.cut = cut(s);
-    o.fogNear = Math.exp(fogN(s));
-    o.fogFar = Math.exp(fogF(s));
-    if (s <= s3) {
-      const e = elev(s) * rad;
-      const tanHalf = Math.exp(fovL(s));
-      const dist = Math.exp(frmL(s)) / (2 * tanHalf);
+    o.cut = ELEV ? 60 : ROOF ? rCut(s) : cut(s);
+    // the garage roof stays whole while the second floor plan is showing (it is roof below on A1.3)
+    o.cutLow = ROOF && s < 0.17 ? 60 : o.cut;
+    o.roofLab = ROOF ? 1 - clamp01((s - 0.045) / 0.025) : 0;
+    o.upLab = ROOF ? clamp01((s - 0.1) / 0.025) * (1 - clamp01((s - 0.178) / 0.02)) : 0;
+    o.planLab = ROOF ? clamp01((s - 0.215) / 0.03) : 1;
+    o.elev = ELEV ? 1 - clamp01((s - s1) / 0.06) : 0;
+    o.fogNear = Math.exp((ROOF ? rFogN : fogN)(s));
+    o.fogFar = Math.exp((ROOF ? rFogF : fogF)(s));
+    if (ELEV && s <= s3) {
+      const yaw = eYaw(s) * rad, pitch = ePitch(s) * rad;
+      const tanHalf = Math.exp(eFov(s));
+      const dist = Math.exp(eFrm(s)) / (2 * tanHalf);
+      o.fov = (2 * Math.atan(tanHalf)) / rad;
+      o.yaw = yaw;
+      o.pitch = pitch;
+      // the camera sits behind its target along the view direction
+      const fx = -Math.sin(yaw) * Math.cos(pitch), fy = Math.sin(pitch), fz = -Math.cos(yaw) * Math.cos(pitch);
+      o.x = etx(s) - fx * dist;
+      o.y = ety(s) - fy * dist;
+      o.z = etz(s) - fz * dist;
+      o.dist = dist;
+    } else if (s <= s3) {
+      const e = over.elev(s) * rad;
+      const tanHalf = Math.exp(over.fovL(s));
+      const dist = Math.exp(over.frmL(s)) / (2 * tanHalf);
       o.fov = (2 * Math.atan(tanHalf)) / rad;
       o.pitch = -e;
       o.yaw = 0;
-      o.x = tx(s);
-      o.y = ty(s) + dist * Math.sin(e);
-      o.z = tz(s) + dist * Math.cos(e);
+      o.x = over.tx(s);
+      o.y = over.ty(s) + dist * Math.sin(e);
+      o.z = over.tz(s) + dist * Math.cos(e);
       o.dist = dist;
     } else {
       const X = px(s), N = pn(s);
@@ -147,9 +210,9 @@ export function makeRig(aspect, route = ROUTES.a) {
     o.great = rv('great', s);
     o.kitchen = rv('kitchen', s);
     o.sky = clamp01((s - 0.4) / 0.12);
-    // keep the depth buffer tight: from far above, everything sits in a thin slab
-    o.near = o.y > 60 ? Math.max(0.1, o.dist - 70) : 0.05;
-    o.far = o.y > 60 ? o.dist + 90 : 600;
+    // keep the depth buffer tight: from far away, everything sits in a thin slab
+    o.near = o.dist > 60 ? Math.max(0.1, o.dist - 70) : 0.05;
+    o.far = o.dist > 60 ? o.dist + 90 : 600;
     return o;
   }
 
